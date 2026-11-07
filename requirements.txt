@@ -1,0 +1,16 @@
+# 插件声明的 Python 依赖（与 _manifest.json 的 dependencies 一致）
+# B 站链路用：Brotli（wss 帧压缩）与 pure-protobuf（新协议礼物包）
+brotli>=1.1.0
+pure-protobuf>=3.1.0
+# 抖音链路用：JS 运行时，执行官网页面的握手签名脚本
+mini-racer>=0.12.0
+# HTTP / WebSocket（字幕层、弹幕墙）
+aiohttp>=3.9.0
+websockets>=12.0
+# 有机演出引擎（子进程）用：逐帧插值 + 同步 WebSocket 客户端
+numpy>=1.24.0
+websocket-client>=1.6.0
+# TTS 播放设备枚举与指定设备播放（未安装时会退化为 ffplay/winsound，且无法选设备）
+sounddevice>=0.4.6
+# ASR 语音对话：全局热键监听（按住说话、松开发送）
+keyboard>=0.13.5

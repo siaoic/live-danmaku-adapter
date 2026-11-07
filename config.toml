@@ -1,0 +1,194 @@
+[plugin]
+enabled = true
+config_version = "1.2.0"
+
+[bilibili]
+enabled = true
+room_id = 0
+sessdata = ""
+
+[douyin]
+enabled = false
+web_rid = ""
+extra_cookie = ""
+
+[events]
+danmaku = true
+super_chat = true
+gift = true
+guard = true
+
+[filter]
+dedup_window_s = 300
+dedup_max_entries = 500
+drop_bracket = true
+max_text_len = 100
+
+[debug]
+log_events = false
+
+[tts]
+enabled = true
+auto_speak_reply = true
+auto_speak_platforms = "live"
+auto_speak_max_length = 200
+# Breeze server 地址（breeze-server.exe 的 --port，见 start-api.bat 里的 PORT）
+server = "http://127.0.0.1:9880"
+timeout = 180.0
+# 音色：voices/ 目录里的 .breeze 文件名（不含扩展名），用 GET /v1/voices 可查全部
+voice_id = "engu"
+# 参考音频（可选）：填了就会在插件启动时自动注册成保存音色（见下方「注册音色名」），
+# 注册后合成走缓存路径，首字延迟从约 900ms 降到约 280ms；注册成功后此文件不再被读取
+ref_audio_path = ""
+# 参考音频的逐字转写（注册必填，会随音色一起存进 .breeze）
+ref_text = ""
+# 注册的保存音色名（只允许字母/数字/短横/下划线，≤64 字）
+voice_name = "live_voice"
+cfg_scale = 2.5
+temperature = 0.0
+split_chars = 0
+seed = 42
+output_device = ""
+virtual_cable_device = "CABLE Input"
+# 整段回复门控的兜底窗口；最后一句播完立即清零，不会额外拖延。
+speech_gate_hold_seconds = 2.0
+buffer_seconds = 0.0
+
+[performance]
+enabled = true
+# 引擎控制接口端口（与 VTS 的 vts_port 错开）
+engine_port = 18766
+python = ""
+# 自动道具：默认关闭——道具交给 AI 在台词里用【狗尾巴草】这类记号决定。
+# 打开后引擎会自己从当前皮套的物品列表 + 开合热键里挑，约 35~90 秒掏一个
+# （开心/得意/害羞/疑惑时提前到 15~45 秒，情绪很负面时不掏），挂 6~12 秒收回。
+# 代价是会和 AI 的选择抢戏：她刚收起某个道具，自动调度又掏出另一个。
+auto_props = false
+
+# ---- VTube Studio 连接 ----
+auto_discover = true
+vts_host = "127.0.0.1"
+vts_port = 8001
+plugin_name = "MaiBot Live Stream Companion"
+plugin_developer = "MaiBot"
+auth_token = ""
+
+# ---- 表情与道具 ----
+auto_expression = true
+emotion_map = ""
+allow_props = true
+react_min_interval = 2.0
+react_hold_seconds = 0.0
+# 动作记号提示词：清空 = 恢复内置默认；全文与占位符说明见 UI
+action_prompt = "【动作记号】你可以在回复里插入动作记号，它们不会念出来，观众也看不到：\n- 小动作：{small_actions}\n- 外观/姿势：{poses}\n- 表情：{expressions}\n- 小道具：{props}\n- 语气：{directions}\n写法：表情、外观、道具都用方括号，如 `【流泪】`、`【兔牙】`、`【狗尾巴草】`（同一个再写一次就收起）；小动作用尖括号，如 `<点头>`。\n组合：一个括号里可以用逗号写多个动作，如 `【微笑,看向屏幕】`、`<点头,眨眼>`，效果等同按顺序逐个写。\n`【重置】` 会收起身上所有表情/道具/姿势并把视线转回镜头，换话题时用。\n语气：在某句话的开头写 `【语气:…】`，那句话就会真的用那种状态说出来。描述用自然语言，情绪、声音质感、语速都可以写，例如：\n`【语气:发现真相后委屈难过，声音低落柔弱，带轻微哽咽，语速稍慢】`、\n`【语气:热恋中自然撒娇，声音柔软亲近，带着俏皮笑意】`。\n图快也可以用快捷词：`【压低声音】`、`【兴奋语气】`、`【带哭腔】`、`【正常语气】`(恢复默认)。\n音效：台词里可以写**半角方括号**的音效标签，会被演绎成真实的非语音声音（不念出来），如 `[laugh]` 笑、`[叹气]`、`[哭]`、`[gasp]` 倒吸气。可用标签（只能用这些，写别的会被念出来）：\n[笑] [大笑] [轻笑] [窃笑] [偷笑] [吸气] [呼气] [深呼吸] [喘气] [叹气] [咳嗽] [清嗓子] [吞咽] [咂嘴] [哭] [抽泣] [哽咽] [尖叫] [惊呼] [打哈欠] [打喷嚏] [哼] [停顿]\n[laugh] [giggle] [chuckle] [sigh] [cough] [clears throat] [sniff] [gasp] [breath] [cry] [yawn]\n**注意区分**：全角【】是给皮套的动作记号（观众看不到），半角[]是给声音的音效标签（观众听得到），两者别写混。\n示例：`这题我会<眨眼>` 是边说边眨一下眼；`呜……你别凶我【流泪】` 是边说边哭。\n表情必须自己写记号才会上脸：想哭就写 `【流泪】` 或 `【委屈】`，只在台词里说「呜呜」是不会出现表情的。\n用法：一回合最多 1~3 个动作记号，语气记号只在情绪转变时用；不要每句都加，也不要把记号写进括号或引号里；列表里没有的动作不要编，宁可不用。"
+
+[live_tools]
+# 浏览器不是永久屏蔽，而是"每轮最多调 1 次"：达到上限就摘掉 browser_*，
+# 逼她看完就开口；下一条弹幕进来计数归零，又能重新上网。
+# live_sight（陪看解说）、tool_search、game_*、记忆查询全部保留。
+enabled = true
+max_browser_calls = 1
+blocked = ""
+
+[proactive]
+enabled = true
+# 纯事件驱动：没有轮询定时器。会在这些事件到来时判断要不要开口：
+#   1. 整段 TTS 播完（下一段的触发点）
+#   2. 游戏推进一步（game-hub 主动 POST 过来）
+# 参数分工：
+#   min_interval_seconds -> 播完之后额外留白几秒；0 = 说完就接（默认）
+#   followup_turns       -> 回完观众的话之后，自己再接着说几轮（0 = 回完就安静）
+#   inflight_seconds     -> 任务发出去却一直没说话时的异常兜底
+# 注意：WebUI 保存过「主动对话」配置时会把 4 写回这里（旧语义的遗留值）。
+# 新语义下 4 会让每句话之间多等 4 秒，想保持「说完就接」请在 UI 里也改成 0。
+min_interval_seconds = 0
+# 「回完弹幕接着自己找话题」：整段回复播完后，用这个额度再叫一次 Planner 让她
+# 自己续话题。只给「回应观众」的段发额度，自语段不再续，所以链长有上限，
+# 不会退化成「音频多长、话就多密」。想让她一直说就调大，只说正事就填 0。
+followup_turns = 1
+inflight_seconds = 8
+# 主动开口后，本轮 Planner/Replyer 请求会隐藏历史弹幕正文；出站即解除，这里是兜底超时。
+# 浏览器工具链（导航 -> 快照 -> 再点视频）实测要 12s+，10s 会让隔离在半路过期、
+# 弹幕规则回流，AI 读完页面却直接 stop 不开口。代码里还有工具链滑动续期 + 30s 下限。
+isolation_seconds = 20
+# 把「正在玩的游戏」带进主动对话：可以解说游戏，也可以聊别的。
+# game-hub 每推进一步就把客观事实（在玩什么/难度/进度/最近几步）POST 过来，
+# 这里开一个只听回环的小端口接收；不含网页台词，也不碰弹幕。
+# game-hub 没开、端口不通时自动跳过，不影响主动开口。
+game_events = true
+game_hub_url = "http://127.0.0.1:8787"
+event_port = 5687
+
+[reply]
+# 只压低「直播弹幕触发的回复」。弹幕照常进上下文与弹幕墙，
+# 主动对话与主播语音（ASR 强制回复）不受影响。
+enabled = true
+# 0.3 ≈ 三成弹幕轮次进 Planner；越小越少回弹幕，1.0 = 不节流
+danmaku_frequency = 0.08
+# 宿主重建聊天流会重置倍率，靠这个间隔自动补回来
+recheck_seconds = 10
+# 宿主默认在同一 turn 内最多连跑 16 轮 Planner，导致上一整段 TTS 还没播完
+# 就又开始规划。开启后 reply 生成可见回复就结束本轮，下一轮 Planner 不会被触发，
+# 只有新弹幕 / 主播语音 / 主动自言自语任务才会开启新 turn。
+end_turn_after_reply = true
+
+[subtitle]
+enabled = true
+host = "127.0.0.1"
+port = 5679
+font_size = 42
+text_color = "#ffffff"
+background = "transparent"
+hold_seconds = 0
+max_chars = 80
+
+[danmaku]
+enabled = true
+host = "127.0.0.1"
+port = 5686
+max_lines = 12
+hold_seconds = 12
+font_size = 22
+text_color = "#ffffff"
+name_color = "#8fd3ff"
+background = "transparent"
+
+[asr]
+enabled = true
+api_key = ""
+base_url = "https://api.siliconflow.cn/v1"
+model = "Qwen/Qwen3-ASR-1.7B"
+hotkey = "f9"
+user_name = "主人"
+device = ""
+min_duration = 0.3
+max_duration = 30
+# 语音快速通道：true = 松手后由 Replyer 直接答并播报，不等 Planner 决策、
+# 不调工具，回答明显更快。代价是她不会真的动手做事（开网页/玩游戏/查日程），
+# 那些只在 Planner 路径里有。对话仍写回上下文，不会出现两套记忆。
+bypass_planner = true
+# 快速通道的写作要求；留空 = 「像在直播间顺口接话，一到两句，口语」。
+# 想让她更短、更有情绪时改这里。
+voice_reply_hint = ""
+
+# ── 日程（从 schedule-hub 插件合并进来）──
+# 按时段规定她该干什么，挂钟到点自动换挡。时段是硬性安排，不是参考数据。
+
+[schedule]
+enabled = true
+fallback = ""
+inject_planner = true
+inject_replyer = true
+# 换挡时直接排一轮主动对话（合并后不再走 HTTP 自环）
+trigger_on_change = true
+trigger_on_load = true
+
+[[schedule.periods]]
+start = "20:00"
+name = "娱乐档"
+focus = "去b站看点什么"
+
+[[schedule.periods]]
+start = "23:00"
+name = "闲聊档"
+focus = "和弹幕聊聊天"

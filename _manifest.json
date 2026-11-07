@@ -1,0 +1,100 @@
+{
+  "manifest_version": 2,
+  "id": "local.live-danmaku-adapter",
+  "version": "1.2.0",
+  "name": "直播适配器",
+  "description": "一个插件承载直播输入输出全链路：把 B 站与抖音直播间的弹幕、礼物、醒目留言、上舰等事件归一化注入 MaiBot 聊天流；同时用 GPT-SoVITS 合成语音、驱动 VTube Studio 有机演出引擎，并提供字幕与弹幕墙本地页面给 OBS。",
+  "author": {
+    "name": "local",
+    "url": "https://github.com/Mai-with-u"
+  },
+  "license": "GPL-v3.0-or-later",
+  "urls": {
+    "repository": "https://github.com/Mai-with-u/maibot",
+    "homepage": "https://github.com/Mai-with-u/maibot",
+    "documentation": "https://docs.maibot.chat/develop/adapters/",
+    "issues": "https://github.com/Mai-with-u/maibot/issues"
+  },
+  "host_application": {
+    "min_version": "1.3.0",
+    "max_version": "1.3.99"
+  },
+  "sdk": {
+    "min_version": "2.20.0",
+    "max_version": "2.99.99"
+  },
+  "plugin_type": "adapter",
+  "dependencies": [
+    {
+      "type": "python_package",
+      "name": "Brotli",
+      "version_spec": ">=1.1.0"
+    },
+    {
+      "type": "python_package",
+      "name": "mini-racer",
+      "version_spec": ">=0.12.0"
+    },
+    {
+      "type": "python_package",
+      "name": "pure-protobuf",
+      "version_spec": ">=3.1.0"
+    },
+    {
+      "type": "python_package",
+      "name": "aiohttp",
+      "version_spec": ">=3.9.0"
+    },
+    {
+      "type": "python_package",
+      "name": "websockets",
+      "version_spec": ">=12.0"
+    },
+    {
+      "type": "python_package",
+      "name": "numpy",
+      "version_spec": ">=1.24.0"
+    },
+    {
+      "type": "python_package",
+      "name": "websocket-client",
+      "version_spec": ">=1.6.0"
+    },
+    {
+      "type": "python_package",
+      "name": "sounddevice",
+      "version_spec": ">=0.4.6"
+    },
+    {
+      "type": "python_package",
+      "name": "keyboard",
+      "version_spec": ">=0.13.5"
+    }
+  ],
+  "capabilities": [
+    "send.text",
+    "chat.get_all_streams",
+    "config.get",
+    "llm.generate",
+    "llm.generate_with_tools",
+    "maisaka.proactive.trigger",
+    "maisaka.reply.generate",
+    "maisaka.context.append",
+    "frequency.get_adjust",
+    "frequency.set_adjust"
+  ],
+  "i18n": {
+    "default_locale": "zh-CN",
+    "supported_locales": [
+      "zh-CN"
+    ]
+  },
+  "display": {
+    "icon": {
+      "type": "local",
+      "value": "assets/icon.svg",
+      "fallback": "radio",
+      "background": "#2B1B3D"
+    }
+  }
+}
