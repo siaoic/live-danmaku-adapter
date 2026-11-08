@@ -16,7 +16,7 @@ from vts.expression import (
     resolve_pairs,
 )
 
-# 示例模型真实的表情与热键（取自 ExpressionStateRequest / HotkeysInCurrentModelRequest）
+# 大肥鱼真实的表情与热键（取自 ExpressionStateRequest / HotkeysInCurrentModelRequest）
 DA_FEI_YU_EXPRESSIONS = [
     "体型1", "体型2", "兔牙", "前倾", "加载", "单片眼镜", "圈圈眼", "屑屑眼",
     "流泪", "竖食指关", "竖食指开", "脱鞋", "脸红", "裙长切换", "胸口衣服",
@@ -42,7 +42,7 @@ DA_FEI_YU_HOTKEYS = [
 
 def _catalog() -> ExpressionCatalog:
     return ExpressionCatalog(
-        model_name="示例模型",
+        model_name="大肥鱼",
         expressions=DA_FEI_YU_EXPRESSIONS,
         hotkeys=DA_FEI_YU_HOTKEYS,
     )

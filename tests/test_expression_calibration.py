@@ -179,7 +179,7 @@ def test_face_units_follow_cubism_semantics() -> None:
 
 
 def test_artmesh_toggle_params_fall_back_to_name() -> None:
-    """真机回归：示例模型的表情文件只翻一个 artmesh 开关参数（key1/key2/key9）。
+    """真机回归：大肥鱼的表情文件只翻一个 artmesh 开关参数（key1/key2/key9）。
 
     这种文件在参数层没有任何可用的面部信息，**不能**因此判成「换装」把脸丢掉；
     必须回到名字语义，否则 7 张脸会全变成展示型（实测踩过）。
@@ -193,7 +193,7 @@ def test_artmesh_toggle_params_fall_back_to_name() -> None:
         "Exp3/兔牙.exp3.json": {"key9": 1.0},
     }
     catalog = ExpressionCatalog(
-        model_name="示例模型",
+        model_name="大肥鱼",
         expressions=list(files),
         expression_files=files,
         expression_params=params,

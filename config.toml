@@ -4,12 +4,12 @@ config_version = "1.2.0"
 
 [bilibili]
 enabled = true
-room_id = 0
+room_id = 22625027
 sessdata = ""
 
 [douyin]
 enabled = false
-web_rid = ""
+web_rid = "776868289343"
 extra_cookie = ""
 
 [events]
@@ -26,6 +26,9 @@ max_text_len = 100
 
 [debug]
 log_events = false
+# 每轮打印「弹幕→首段」延迟分解：等待（宿主调度）/ Planner / Replyer 三段
+# 各自耗时。只观测不改链路；压首字延迟时先看这三段谁占大头再动手。
+latency_log = true
 
 [tts]
 enabled = true
@@ -85,10 +88,17 @@ action_prompt = "【动作记号】你可以在回复里插入动作记号，它
 [live_tools]
 # 浏览器不是永久屏蔽，而是"每轮最多调 1 次"：达到上限就摘掉 browser_*，
 # 逼她看完就开口；下一条弹幕进来计数归零，又能重新上网。
-# live_sight（陪看解说）、tool_search、game_*、记忆查询全部保留。
+# 2026-11-08 压延迟：每个工具定义的 schema 都算进每轮 prefill（实测整表 5786 字符
+# ≈2900 token），而 prefill 直接决定 Planner 首字。直播里 game_*/piano_play 几乎不用，
+# 摘掉省 ~1100 字符。注意 tool_search 不需要单独屏蔽：只要上面有任何重工具被摘，
+# 代码会连它一起摘（否则模型会反复搜索已被过滤的工具，形成死循环）。
 enabled = true
 max_browser_calls = 1
-blocked = ""
+# 单轮工具调用硬上限：每多一个工具轮，Planner 就要重跑一次（实测 0.6~1.5 秒）。
+# 实测 20~40 轮工具循环会把端到端拖到 8~11 秒；到上限后工具表只剩 reply/stop，
+# 她只能开口。3 次 ≈ 看一看、查一查、然后说话；0 = 不限（回到老行为）。
+max_tool_calls_per_turn = 3
+blocked = "game_,piano_"
 
 [proactive]
 enabled = true
@@ -124,13 +134,24 @@ event_port = 5687
 # 主动对话与主播语音（ASR 强制回复）不受影响。
 enabled = true
 # 0.3 ≈ 三成弹幕轮次进 Planner；越小越少回弹幕，1.0 = 不节流
-danmaku_frequency = 0.08
+# 2026-11-08 实测临时调整：0.08 叠加宿主 no_action_backoff 退避后，
+# 8 分钟内一次 Planner 都没排到，缓存命中率无从测量。提到建议区间上限
+# 0.4 让实测能产生连续请求；实测结束后可改回 0.08。
+danmaku_frequency = 0.4
 # 宿主重建聊天流会重置倍率，靠这个间隔自动补回来
 recheck_seconds = 10
 # 宿主默认在同一 turn 内最多连跑 16 轮 Planner，导致上一整段 TTS 还没播完
 # 就又开始规划。开启后 reply 生成可见回复就结束本轮，下一轮 Planner 不会被触发，
 # 只有新弹幕 / 主播语音 / 主动自言自语任务才会开启新 turn。
 end_turn_after_reply = true
+
+[cache]
+# DeepSeek 前缀缓存：宿主上下文压缩会整批替换历史开头，前缀缓存必然塌一次
+# （真机最差轮 42~57%）。插件在请求前维护上一轮 prompt 的严格前缀，压缩轮
+# 也只追加不删除，本轮仍是上一轮的超集。
+# 0 = 关闭（退回宿主原生压缩语义）；默认 110 条时真机全轮平均 88% -> 93%、
+# 最差轮 42% -> 86%。代价：上下文比原生压缩长约 60%，达到上限会重建并冷一次。
+prefix_archive_max_items = 110
 
 [subtitle]
 enabled = true
@@ -159,7 +180,7 @@ api_key = ""
 base_url = "https://api.siliconflow.cn/v1"
 model = "Qwen/Qwen3-ASR-1.7B"
 hotkey = "f9"
-user_name = "主人"
+user_name = "超人不会飞"
 device = ""
 min_duration = 0.3
 max_duration = 30
@@ -184,11 +205,16 @@ trigger_on_change = true
 trigger_on_load = true
 
 [[schedule.periods]]
-start = "20:00"
+start = "20:12"
 name = "娱乐档"
-focus = "去b站看点什么"
+focus = "去b站看名侦探柯南"
 
 [[schedule.periods]]
-start = "23:00"
-name = "闲聊档"
-focus = "和弹幕聊聊天"
+start = "20:14"
+name = "娱乐档"
+focus = "去b站看neuro sama"
+
+[[schedule.periods]]
+start = "20:16"
+name = "娱乐档"
+focus = "去b站看木几萌"

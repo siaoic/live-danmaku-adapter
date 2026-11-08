@@ -157,13 +157,71 @@ def test_schedule_intent_wins_over_game_scene() -> None:
 
 
 def test_schedule_rule_requires_tool_use() -> None:
-    """主动轮尾部规则要写清「先调工具」，否则模型只会直接 stop。"""
+    """浏览器可用时，主动轮尾部规则要写清「先调工具」，否则模型只会直接 stop。"""
 
-    rule = plugin.proactive_schedule_rule("去b站看木几萌")
+    rule = plugin.proactive_schedule_rule("去b站看木几萌", browser_available=True)
     assert "去b站看木几萌" in rule
-    assert "tool_search" in rule
+    assert "browser_navigate" in rule
     assert "browser_snapshot" in rule
     assert "stop" in rule
+
+
+def test_schedule_rule_drops_browser_guidance_when_unavailable() -> None:
+    """浏览器工具本轮被摘掉时，绝不能再让模型去搜它（否则会无限 tool_search）。"""
+
+    rule = plugin.proactive_schedule_rule("去b站看木几萌", browser_available=False)
+    assert "去b站看木几萌" in rule
+    # 关键：不能出现任何「去用浏览器 / 去搜工具」的指令
+    assert "tool_search" not in rule
+    assert "browser_navigate" not in rule
+    assert "browser_snapshot" not in rule
+    # 必须明确要求这一轮开口
+    assert "开口" in rule
+
+
+def test_strip_deferred_tools_reminder_removes_reminder_only() -> None:
+    """宿主那条「可以用 tool_search 发现工具」的提示要能被整段摘掉。"""
+
+    items = [
+        {"item_type": "SystemMessageItem", "parts": [{"type": "text", "text": "正常 system"}]},
+        {
+            "item_type": "UserMessageItem",
+            "parts": [
+                {
+                    "type": "text",
+                    "text": "<system-reminder>\n以下工具当前未直接暴露给你，可以通过 tool_search 发现…\n</system-reminder>",
+                }
+            ],
+        },
+        {"item_type": "UserMessageItem", "parts": [{"type": "text", "text": "普通观众消息"}]},
+    ]
+    stripped_items, count = plugin.strip_deferred_tools_reminder(items)
+    assert count == 1
+    assert len(stripped_items) == 2
+    joined = str(stripped_items)
+    assert "system-reminder" not in joined
+    assert "普通观众消息" in joined
+    assert "正常 system" in joined
+
+
+def test_strip_deferred_tools_reminder_keeps_other_parts() -> None:
+    """同一条消息里若还有别的文本 part，只删提示、保留其余。"""
+
+    items = [
+        {
+            "item_type": "UserMessageItem",
+            "parts": [
+                {"type": "text", "text": "重要上下文"},
+                {"type": "text", "text": "<system-reminder>tool_search…</system-reminder>"},
+            ],
+        }
+    ]
+    stripped_items, count = plugin.strip_deferred_tools_reminder(items)
+    assert count == 1
+    assert len(stripped_items) == 1
+    parts = stripped_items[0]["parts"]
+    assert len(parts) == 1
+    assert parts[0]["text"] == "重要上下文"
 
 
 def test_event_inbox_receives_push() -> None:
@@ -436,15 +494,18 @@ def test_schedule_guidance_targets_browser_mcp_only() -> None:
     """刷B站插件已删除：引导只能指向 playwright MCP 浏览器工具。"""
 
     text = ProactiveDirector().build_intent("", schedule_focus="去b站看木几萌")
-    rule = plugin.proactive_schedule_rule("去b站看木几萌")
+    rule = plugin.proactive_schedule_rule("去b站看木几萌", browser_available=True)
     for block in (text, rule):
-        assert "tool_search" in block
-        assert "打开网页" in block
         assert "browser_snapshot" in block
         # 不能再让模型去找一个已经不存在的插件工具
         assert "bilibili_watch" not in block
         assert "bilibili_browse" not in block
         assert "刷B站" not in block
+    # 只有 ProactiveDirector 的 intent 还保留「没有就 tool_search 搜」的说法；
+    # 插件的尾部规则不再提 tool_search —— 浏览器被摘掉时那条指引会让模型
+    # 反复搜索一个自己已经拿不到的工具（见 test_schedule_rule_drops_browser_guidance_when_unavailable）。
+    assert "tool_search" in text
+    assert "tool_search" not in rule
 
 
 def test_followup_intent_continues_previous_line() -> None:
@@ -663,16 +724,25 @@ def test_schedule_hub_injection_keeps_all_kwargs() -> None:
     assert changed["session_id"] == "live-stream-1"
     assert changed["tool_definitions"] == [{"name": "browser_navigate"}]
     assert changed["item_schema_version"] == 3
-    text = changed["items"][0]["parts"][-1]["text"]
-    assert "日程表（必须遵守）" in text
-    # 易变的当前档行在对话尾部（缓存友好），不在 system 里
-    assert "当前时段" not in text
+    # 缓存契约（2026-11-08 更改）：插件**完全不碰 system**。
+    # 原来这里会把稳定段追加进 system 的 parts 末尾，但宿主在部分路径下
+    # items 里没有 SystemMessageItem，注入 fallback 会新建一条「只含日程」的
+    # system 顶到第 0 条，于是 prompt 第 0 条在「人格段」/「日程段」之间
+    # 反复横跳，最长公共前缀只剩 0.2%~35%，命中率被压在 50%。
+    # 现在稳定段也一起走尾部（_append_schedule_tail），system 一个字节不动。
+    system_text = "\n".join(
+        str(pt.get("text") or "")
+        for pt in (changed["items"][0].get("parts") or []) if isinstance(pt, dict)
+    )
+    assert "日程表（必须遵守）" not in system_text, "system 必须保持原样（缓存前缀）"
+    assert "基础人设" in system_text, "人格段不能被替换掉"
     all_text = "\n".join(
         str(pt.get("text") or "")
         for item in changed["items"] if isinstance(item, dict)
         for pt in (item.get("parts") or []) if isinstance(pt, dict)
     )
-    assert "当前时段" in all_text
+    assert "日程表（必须遵守）" in all_text, "日程稳定段仍须在本轮上下文里生效"
+    assert "当前时段" in all_text, "当前档行在尾部"
 
 
 def test_typing_delay_hook_is_registered_not_the_helper() -> None:
@@ -714,7 +784,7 @@ def test_schedule_mode_drops_story_rule() -> None:
             "parts": [
                 {
                     "type": "text",
-                    "text": "你的名字是Bot。【弹幕回复规则】回复弹幕时，要先读一遍弹幕。",
+                    "text": "你的名字是Evil。【弹幕回复规则】回复弹幕时，要先读一遍弹幕。",
                 }
             ],
         },

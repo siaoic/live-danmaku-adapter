@@ -8,12 +8,10 @@
 from __future__ import annotations
 
 import importlib.util
-import os
 import sys
 from pathlib import Path
 
-# MaiBot 主程序根目录：默认从插件目录往上两级，可用 MAIBOT_ROOT 覆盖
-ROOT = Path(os.environ.get("MAIBOT_ROOT") or Path(__file__).resolve().parents[3])
+ROOT = Path(r"E:/AI/直播/MaiBot-1.3.19")
 sys.path.insert(0, str(ROOT))
 
 PLUGIN_DIR = Path(__file__).resolve().parent.parent

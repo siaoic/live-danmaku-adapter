@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import asyncio
+import threading
 import importlib.util
 import sys
 import time
@@ -44,7 +45,7 @@ def _items() -> list:
         _item("u1", '<message msg_id="1" user="观众A">[B站弹幕] 观众A: 主播讲个笑话</message>'),
         _item("u2", "[抖音礼物] 小明 送出了 小心心x1"),
         _item("u3", "[B站醒目留言 ¥30] 土豪: 点首歌"),
-        _item("u4", "[语音弹幕] 主播: 你今天怎么样"),
+        _item("u4", "[语音弹幕] 超人不会飞: 你今天怎么样"),
         _item("u5", "普通的本地聊天室消息，不带任何直播前缀"),
         _item("u6", ProactiveDirector().build_intent()),
         _item(
@@ -57,6 +58,17 @@ def _items() -> list:
 def _adapter() -> LiveDanmakuAdapter:
     adapter = LiveDanmakuAdapter()
     adapter._live_stream_ids[SID] = None
+    # 测试夹具不走 on_load，但有些钩子会用这两个锁与计数：
+    # 缺少它们会抛 AttributeError，被钩子的 try/except 吞掉后表现为
+    # 「钩子莫名返回 None」——排查花时间且掩盖真实断言。这里显式补齐。
+    adapter._cache_lock = threading.Lock()
+    adapter._isolation_lock = threading.Lock()
+    adapter._cache_stats = {
+        "actions_cache_hits": 0,
+        "actions_warm_total": 0,
+        "actions_cache_misses": 0,
+        "actions_fetch_success": 0,
+    }
     return adapter
 
 
@@ -199,10 +211,10 @@ def test_strip_replaces_rules_summary_guidance_and_assistant_history() -> None:
 
     items = [
         _item("rule", "当前聊天额外注意事项： 【弹幕回复规则】 - 回复弹幕时，要先读一遍弹幕，再给出回应。"),
-        _item("summary", "【上下文状态摘要-内部参考】 当前话题: - Bot 反复向弹幕要一个背靠墙的角落。"),
-        _item("guide", "弹幕读到观众A说“我不会得狂犬病吧”。 发言指导： - 先读弹幕：观众A说…"),
+        _item("summary", "【上下文状态摘要-内部参考】 当前话题: - Evil 反复向弹幕要一个背靠墙的角落。"),
+        _item("guide", "弹幕读到戎依凝说“我不会得狂犬病吧”。 发言指导： - 先读弹幕：戎依凝说…"),
         _item("assistant", "弹幕读到 bili_123 只发了一个？，友好范畴", "AssistantMessageItem"),
-        _item("self", '<message user="Bot" is_self_message="true"> 我给你们算个账啊，硬币有编制'),
+        _item("self", '<message user="Evil" is_self_message="true"> 我给你们算个账啊，硬币有编制'),
         _item("plain", "当前时间：2026-11-05 21:24:11"),
     ]
     new, hidden = strip_live_context_items(items)
@@ -236,7 +248,7 @@ def test_strip_handles_bare_danmaku_guidance_and_phrase_hints() -> None:
 def test_strip_leaves_system_untouched_for_prefix_cache() -> None:
     """主动轮不再改写 system：system 是前缀缓存起点，保持原样才能连续命中。"""
 
-    system = "你的名字是Bot。\n当前聊天额外注意事项：\n【弹幕回复规则】\n- 回复弹幕时，要先读一遍弹幕。"
+    system = "你的名字是Evil。\n当前聊天额外注意事项：\n【弹幕回复规则】\n- 回复弹幕时，要先读一遍弹幕。"
     items = [_item("sys", system, "SystemMessageItem"), _item("u1", "[B站弹幕] 观众A: 在吗")]
     new, hidden = strip_live_context_items(items)
     assert hidden == 1
@@ -394,14 +406,14 @@ def _self_echo_items() -> list:
         _item("sys", "system prompt", "SystemMessageItem"),
         _item(
             "s1",
-            '<message msg_id="m6eaj2l" time="23:03:30" user="Bot" is_self_message="true">\n行吧大爷听完当场把蓝条当血条用</message>',
+            '<message msg_id="m6eaj2l" time="23:03:30" user="Evil" is_self_message="true">\n行吧大爷听完当场把蓝条当血条用</message>',
         ),
         _item(
             "s2",
-            '<message msg_id="mtcsapr" time="23:03:30" user="Bot" is_self_message="true">\n搓个火球把自己蓝搓干净了还问我怎么放不出来</message>',
+            '<message msg_id="mtcsapr" time="23:03:30" user="Evil" is_self_message="true">\n搓个火球把自己蓝搓干净了还问我怎么放不出来</message>',
         ),
         _item(
-            "s3", '<message msg_id="mbp2bkr" time="23:03:30" user="Bot" is_self_message="true">\n我已急哭</message>'
+            "s3", '<message msg_id="mbp2bkr" time="23:03:30" user="Evil" is_self_message="true">\n我已急哭</message>'
         ),
         _item("tail", "请你进行分析，是不调用工具，进行思考和等待\n还是使用 reply 回复"),
     ]
@@ -419,16 +431,19 @@ def _texts(items: list) -> str:
 def test_annotate_self_messages_preserves_structure_and_is_idempotent() -> None:
     """只给自身消息加标签：不删 Item、不改 meta、保留原文、不重复标注。"""
 
+    # 重构后的契约（2026-11-08）：**不再改写历史**。
+    # 宿主的 <message> 里原生就带 is_self_message="true"，插件再往每条历史开头
+    # 加一段标签属于纯冗余改写 —— 而 prompt cache 是前缀命中，
+    # 历史任何一条被改写都会让其后所有 token 失配（实测前缀只剩 0.2%~35%）。
+    # 自我发言识别改由尾部规则 SELF_ECHO_RULE 承担（尾部本来就每轮变化）。
     items = _self_echo_items()
     new, count = plugin.annotate_self_messages(items)
-    assert count == 3
-    assert new[0] is items[0] and new[4] is items[4]
-    for index in (1, 2, 3):
-        assert new[index]["meta"]["item_id"] == items[index]["meta"]["item_id"]
-        assert new[index]["parts"][0]["text"].startswith(plugin.SELF_ECHO_LABEL)
+    assert count == 0, "历史不该被标注"
+    assert new is items, "恒等返回，调用方据此不改写 kwargs"
     assert "我已急哭" in new[3]["parts"][0]["text"]
-    again, again_count = plugin.annotate_self_messages(new)
-    assert again_count == 0 and again == new
+    assert not any(plugin.SELF_ECHO_LABEL in part["text"]
+                   for item in new for part in item.get("parts", [])
+                   if isinstance(part, dict) and isinstance(part.get("text"), str))
 
 
 def test_self_only_round_ignores_rounds_with_real_viewers() -> None:
@@ -472,7 +487,10 @@ def test_planner_hook_asks_model_to_wait_on_self_only_round() -> None:
     joined = _texts(modified["items"])
     assert plugin.SELF_ONLY_ROUND_RULE in joined
     assert plugin.SELF_ECHO_RULE in joined
-    assert joined.count(plugin.SELF_ECHO_LABEL) == 3
+    # 历史不再被标注（重构契约）；识别规则只在尾部出现一次。
+    assert joined.count(plugin.SELF_ECHO_LABEL) == 0
+    # 尾部规则必须存在，模型靠它区分自我发言
+    assert plugin.SELF_ECHO_RULE in joined
 
 
 def test_proactive_round_keeps_self_messages_without_self_only_rule() -> None:
@@ -489,7 +507,8 @@ def test_proactive_round_keeps_self_messages_without_self_only_rule() -> None:
     joined = _texts(result["modified_kwargs"]["items"])
     assert plugin.PROACTIVE_FRESH_RULE in joined
     assert plugin.SELF_ONLY_ROUND_RULE not in joined
-    assert joined.count(plugin.SELF_ECHO_LABEL) == 3
+    assert joined.count(plugin.SELF_ECHO_LABEL) == 0, "历史不改写（缓存前缀）"
+    assert plugin.SELF_ECHO_RULE in joined, "自我发言识别靠尾部规则"
     assert PLACEHOLDER in joined  # 弹幕照常隐藏
 
 
@@ -530,16 +549,20 @@ def test_auto_speak_skips_text_from_self_only_round() -> None:
     assert adapter._speech_pending == 1  # 正常轮照常排队播报
 
 
-def test_replyer_context_annotates_self_in_every_live_round() -> None:
-    """生成层也标注自身消息，避免最终字句去接自己上一句。"""
+def test_replyer_context_leaves_history_untouched() -> None:
+    """生成层不再改写历史：前缀稳定是缓存命中的前提。
+
+    重构前这里会给每条自身消息加前缀标签；prompt cache 是前缀命中，
+    历史任何一条被改写都会让其后所有 token 失配。现在历史原样透传，
+    自我发言识别交给 extra_prompt 里的 SELF_ECHO_RULE（Replyer 侧由 hint 钩子注入）。
+    因此本钩子在「没有主动轮需要清洗弹幕」时**不应该改写任何参数**（返回 None）。
+    """
 
     adapter = _adapter()
     kwargs = {"session_id": SID, "items": _self_echo_items(), "extra_prompt": "语气轻快"}
     result = asyncio.run(adapter.proactive_reply_context_hook(**kwargs))
-    assert result is not None
-    assert result["modified_kwargs"]["session_id"] == SID
-    assert result["modified_kwargs"]["extra_prompt"] == "语气轻快"
-    assert _texts(result["modified_kwargs"]["items"]).count(plugin.SELF_ECHO_LABEL) == 3
+    assert result is None, "普通轮没有任何改写时不该返回 modified_kwargs"
+    assert _texts(kwargs["items"]).count(plugin.SELF_ECHO_LABEL) == 0, "历史不得被标注"
 
 
 def main() -> int:
@@ -633,7 +656,14 @@ def _browser_chain_items() -> list:
 
 
 def test_browser_chain_budget_closes_tools() -> None:
-    """工具链跑够就收口：不给浏览器工具，模型只能 reply 开口讲。"""
+    """工具链跑够就收口：工具表逐轮冻结，收口改由唯一尾部规则槽表达。
+
+    2026-11-08 前缀缓存重构：旧实现直接把 browser_* 从 tool_definitions 里
+    摘掉，但工具表是 prompt 的第一个 token 块，集合一变后面整段缓存作废。
+    现在按 dsh-ops 的「固定 scoped 工具集 + 可选路由引导」做：工具表一次
+    冻结、逐轮字节一致；超预算时把「网页已经看完、直接开口」写进尾部槽，
+    不再改工具表。这里同时守住缓存契约与收口语义。
+    """
 
     adapter = _adapter_with_isolation(60)
     adapter._arm_proactive_isolation(SID)
@@ -646,25 +676,163 @@ def test_browser_chain_budget_closes_tools() -> None:
     ]
     kwargs = {"session_id": SID, "items": _browser_chain_items(), "tool_definitions": tools}
 
+    frozen_baseline = None
     # 预算内：浏览器工具照常可见，每走一步都在续期
     for step in range(plugin.MAX_PROACTIVE_BROWSER_CALLS):
         result = asyncio.run(adapter.planner_tool_filter_hook(**kwargs))
-        names = [
-            adapter._tool_definition_name(d)
-            for d in result["modified_kwargs"].get("tool_definitions", tools)
-        ]
+        returned = result["modified_kwargs"].get("tool_definitions", tools)
+        if frozen_baseline is None:
+            frozen_baseline = returned
+        assert returned == frozen_baseline, "工具表必须逐轮逐字节一致（prompt 第一个 token 块）"
+        names = [adapter._tool_definition_name(d) for d in returned]
         assert "browser_navigate" in names, f"第 {step + 1} 步不该提前收口"
+        assert "reply" in names and "stop" in names
         assert adapter._proactive_browser_calls == step + 1
 
-    # 超预算：拿掉 browser_*，但保留 reply / stop，让她能开口
+    # 超预算：工具表一个字节都不动，改用尾部规则要求模型直接开口
     result = asyncio.run(adapter.planner_tool_filter_hook(**kwargs))
-    names = [
-        adapter._tool_definition_name(d)
-        for d in result["modified_kwargs"]["tool_definitions"]
+    returned = result["modified_kwargs"].get("tool_definitions", tools)
+    assert returned == frozen_baseline, "收口轮也不能改工具表，否则整段前缀缓存作废"
+    names = [adapter._tool_definition_name(d) for d in returned]
+    assert {"browser_navigate", "browser_snapshot", "reply", "stop"} <= set(names)
+    items = result["modified_kwargs"]["items"]
+    tail_text = "\n".join(
+        str(part.get("text") or "")
+        for part in items[-1].get("parts", [])
+        if isinstance(part, dict)
+    )
+    assert plugin.PROACTIVE_BROWSER_DONE_RULE in tail_text, "超预算必须写出收口规则"
+    assert items[-1]["meta"]["item_id"] == "live-prefix-cache-volatile", "动态规则必须落在变量尾巴"
+    assert items[-1]["meta"]["timestamp"] == "2020-01-01T00:00:00", "变量尾巴 meta 必须固定"
+    # 恒定基线规则单独占规则槽（LATE Hook 会把它前置成稳定前缀）
+    assert sum(
+        1 for it in items
+        if str((it.get("meta") or {}).get("item_id") or "") == "live-prefix-cache-tail-rule"
+    ) == 1
+
+
+def test_planner_hook_keeps_round_rule_with_schedule_focus() -> None:
+    """主动轮 + 日程档：Hook 必须回传 items，且规则槽里要有 round 槽。
+
+    2026-11-08 真机回归：把 classmethod ``_has_browser_tool`` 写成裸函数
+    调用，``planner_tool_filter_hook`` 每轮抛 NameError，却被 ``except`` 吞成
+    ``None``。21 轮真机请求里本轮规则（自己发言识别 / 弹幕防伪 / 收口规则）、
+    deferred 提示清理、主动轮上下文清洗**全部没生效**，只有 LATE Hook 在跑；
+    快照里的规则槽只剩 schedule。Hook 用 try/except 兜底是对的，但必须能测到
+    「本该改写却静默返回 None」这种情况。
+    """
+
+    adapter = _adapter_with_isolation(60)
+    adapter._arm_proactive_isolation(SID)
+    adapter._proactive_task_ids.add("proactive:local.live-danmaku-adapter:browser")
+    adapter._schedule_focus = "去b站看木几萌"
+    tools = [
+        {"function": {"name": name}}
+        for name in ("reply", "stop", "browser_navigate", "browser_snapshot", "tool_search")
     ]
-    assert "browser_navigate" not in names
-    assert "browser_snapshot" not in names
-    assert "reply" in names and "stop" in names
+    kwargs = {"session_id": SID, "items": _items(), "tool_definitions": tools}
+
+    result = asyncio.run(adapter.planner_tool_filter_hook(**kwargs))
+    assert result is not None, "Hook 静默抛异常会让整轮注入全部失效"
+    payload = result["modified_kwargs"]
+    assert payload["session_id"] == SID and "tool_definitions" in payload
+    items = payload["items"]
+    tail = [
+        item for item in items
+        if isinstance(item, dict)
+        and str((item.get("meta") or {}).get("item_id") or "") == "live-prefix-cache-tail-rule"
+    ]
+    assert len(tail) == 1, "必须只有一条规则 Item"
+    text = "\n".join(
+        str(part.get("text") or "")
+        for part in tail[0].get("parts", [])
+        if isinstance(part, dict)
+    )
+    assert "自己发言识别规则" in text, "round 槽（本轮规则）必须进 prompt"
+    assert not text.lstrip().startswith("@@SLOT:schedule@@"), "round 槽不能被 schedule 覆盖"
+
+
+def test_full_planner_hook_chain_produces_stable_layout() -> None:
+    """三个 Planner Hook 串起来后：规则槽进前缀、变量尾巴进绝对末尾。
+
+    覆盖 EARLY（工具过滤）-> EARLY（日程注入）-> LATE（前缀收口）的完整
+    链路。真机里 Hook 是链式整体替换 modified_kwargs，只单独测一个 Hook
+    看不到真正发往模型的 prompt 布局。
+    """
+
+    adapter = _adapter_with_isolation(60)
+    adapter._arm_proactive_isolation(SID)
+    adapter._schedule_focus = "去b站看木几萌"
+    tools = [
+        {"function": {"name": name}}
+        for name in ("reply", "stop", "browser_navigate", "tool_search")
+    ]
+    kwargs = {"session_id": SID, "items": _items(), "tool_definitions": tools}
+
+    first = asyncio.run(adapter.planner_tool_filter_hook(**kwargs))
+    assert first is not None
+    payload = first["modified_kwargs"]
+    # 日程注入：config.schedule 未注入时会被 Hook 的 try/except 兜住，直接沿用
+    last = asyncio.run(adapter.prefix_cache_finalize_hook(**payload))
+    final = last["modified_kwargs"] if last else payload
+    items = final["items"]
+
+    ids = [str((it.get("meta") or {}).get("item_id") or "") for it in items]
+    assert "live-prefix-cache-tail-rule" in ids
+    assert ids[-1] == "live-prefix-cache-volatile", "变量尾巴必须在绝对末尾"
+    # sys 是 SystemMessageItem，按 Qwen 模板必须留在第 0 条，不算历史
+    history_ids = [i for i in ids if i.startswith(("u", "task"))]
+    if history_ids:
+        assert ids.index("live-prefix-cache-tail-rule") < ids.index(history_ids[0]), (
+            "恒定规则槽必须排在历史之前（真机 18/20 轮失配就出在它排在历史之后）"
+        )
+    volatile_text = "\n".join(
+        str(pt.get("text") or "") for pt in items[-1].get("parts", []) if isinstance(pt, dict)
+    )
+    assert "当前时段" not in (
+        "\n".join(
+            str(pt.get("text") or "")
+            for it in items if str((it.get("meta") or {}).get("item_id")) == "live-prefix-cache-tail-rule"
+            for pt in it.get("parts", []) if isinstance(pt, dict)
+        )
+    ), "易变内容不能污染恒定前缀"
+
+
+def test_prefix_cache_finalize_keeps_prefix_across_host_compaction() -> None:
+    """宿主压缩后 LATE Hook 仍保持「严格前缀 + 只追加」，不触发重复 id。
+
+    参考 dsh-context 的「已移除消息存档」+ dsh-ops 的「下一轮 provider
+    request 生效」：宿主把历史裁短时，插件用上一轮存档把旧前缀补回来，
+    本轮仍是上一轮的超集，压缩轮的 42~57% 冷启动就此消失。
+    """
+
+    adapter = _adapter_with_isolation(60)
+    tools = [{"function": {"name": name}} for name in ("reply", "stop", "tool_search")]
+    first_kwargs = {"session_id": SID, "items": _items(), "tool_definitions": tools}
+    first_result = asyncio.run(adapter.prefix_cache_finalize_hook(**first_kwargs))
+    assert first_result is not None
+    first = first_result["modified_kwargs"]["items"]
+    volatile_id = "live-prefix-cache-volatile"
+    body1 = [
+        it for it in first
+        if str((it.get("meta") or {}).get("item_id") or "") != volatile_id
+    ]
+
+    # 模拟宿主上下文压缩：丢掉中间历史，只留头尾几条 + 一条新弹幕
+    shortened = first[:2] + first[-3:] + [_item("new", "<message>新弹幕</message>")]
+    second_result = asyncio.run(
+        adapter.prefix_cache_finalize_hook(**{**first_kwargs, "items": shortened})
+    )
+    assert second_result is not None
+    second = second_result["modified_kwargs"]["items"]
+    assert second[: len(body1)] == body1, "上一轮前缀必须逐字节保留"
+    assert len(second) > len(body1), "本轮新增消息必须追加在后"
+    ids = [str((it.get("meta") or {}).get("item_id") or "") for it in second]
+    assert len(set(ids)) == len(ids), "不能触发宿主 duplicate_item_ids"
+    # 夹具里没有时间行时 stabilize_layout 不会生成变量尾巴；有则必须在末尾。
+    # volatile 位置本身由 test_prefix_cache.py 的布局测试单独守。
+    if volatile_id in ids:
+        assert ids[-1] == volatile_id, "变量尾巴仍在绝对末尾"
 
 
 def test_browser_call_counter_resets_on_arm_and_disarm() -> None:

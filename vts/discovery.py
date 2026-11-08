@@ -43,6 +43,8 @@ _STEAM_PATHS: dict[str, List[str]] = {
         r"D:\Program Files\Steam\steamapps\common\VTube Studio",
         r"D:\Steam\steamapps\common\VTube Studio",
         r"D:\SteamLibrary\steamapps\common\VTube Studio",
+        r"E:\Steam\steamapps\common\VTube Studio",
+        r"E:\SteamLibrary\steamapps\common\VTube Studio",
     ],
     "Darwin": [str(Path.home() / "Library/Application Support/Steam/steamapps/common/VTube Studio")],
     "Linux": [

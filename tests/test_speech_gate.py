@@ -434,7 +434,11 @@ def test_planner_hook_returns_complete_kwargs() -> None:
     assert result is not None
     changed = result["modified_kwargs"]
     assert len(changed["tool_definitions"]) == 1
-    assert changed["items"] is kwargs["items"]
+    # 缓存契约（2026-11-08）：尾部规则改成**追加独立 user 消息**，
+    # 不再原地改写已有 Item —— 改写会让那条之后的全部 token 失去缓存。
+    # system（第 0 条）必须逐字节不变，这是前缀缓存能命中的前提。
+    assert changed["items"][0] == kwargs["items"][0], "system 不能被动过"
+    assert len(changed["items"]) > len(kwargs["items"]), "规则应以新增消息形式落到尾部"
     assert changed["item_schema_version"] == 1
     assert changed["session_id"] == SID
     assert changed["selection_reason"] == "recent"

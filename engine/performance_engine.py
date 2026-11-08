@@ -393,7 +393,7 @@ class ModelProfile:
     """自适应：探测当前模型支持哪些参数，据此调整表现策略。
 
     实测各模型差异极大（同一台 VTS 上）：
-      * Example_vts  32 个输入、无身体、有眉毛
+      * DeepSeek_vts  32 个输入、无身体、有眉毛
       * hijiki_vts    10 个输入、无身体、无眉毛
       * wanko_vts      8 个输入、无身体、无眉毛
       * yumi_vts      18 个输入、有身体、有眉毛
@@ -1358,7 +1358,7 @@ class Engine:
     def body_layer(self, now):
         """身体层：独立驱动躯干/胯/肩，不再只是"头带着身体晃"。
 
-        这个模型（示例模型）没有把 FaceAngle 映射到独立的身体通道，
+        这个模型（大肥鱼）没有把 FaceAngle 映射到独立的身体通道，
         实测 FaceAngleX 虽然会顺带带动 ParamBodyAngleX，但幅度被动、
         而且完全是头部的附庸 —— 看起来就是"头在动、身子是块木头"。
 

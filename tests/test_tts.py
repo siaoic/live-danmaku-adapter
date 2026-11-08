@@ -233,7 +233,7 @@ def test_playback_falls_back_when_device_unresolvable(
 
 
 def test_playback_missing_temp_dir_returns_false() -> None:
-    player = AudioPlayer(temp_dir=str(Path("no_such_dir") / "deeper" / "lsc"))
+    player = AudioPlayer(temp_dir="E:/no/such/dir/for/lsc")
     assert asyncio.run(player.play_wav_bytes(make_wav_bytes())) is False
 
 

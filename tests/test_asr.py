@@ -80,7 +80,7 @@ def test_voice_message_forces_reply_and_not_danmaku() -> None:
 
     channel = LiveChannel(ctx=None, gateway_name="test")
     channel._queue = asyncio.Queue(maxsize=4)
-    assert channel.submit_voice("今天天气怎么样", "主播")
+    assert channel.submit_voice("今天天气怎么样", "超人不会飞")
     event = channel._queue.get_nowait()
     message = build_message(event, 1, ChannelSettings())
     extra = message["message_info"]["additional_config"]

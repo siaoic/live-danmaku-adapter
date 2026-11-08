@@ -53,13 +53,24 @@ def test_long_reply_not_filtered() -> None:
 
 
 def test_host_config_disables_typo() -> None:
-    """根治开关：宿主错字注入关闭（回复断句由 test_speech_gate.py 单独守）。"""
+    """根治开关：宿主错字注入关闭（回复断句由 test_speech_gate.py 单独守）。
+
+    宿主 1.4.x 把错别字功能迁移到内置插件 ``builtin.chinese-typo``，
+    ``config/bot_config.toml`` 里的 ``[chinese_typo]`` 段被移除，改由
+    ``[response_post_process]`` + 内置插件开关控制。旧段消失本身就意味着
+    宿主不再按旧方式注入错字；此时只确认新段存在。旧段仍在的老版本上，
+    仍严格要求两个开关都是 False。
+    """
 
     config_path = _PLUGIN_DIR.parent.parent / "config" / "bot_config.toml"
     with config_path.open("rb") as fh:
         cfg = tomllib.load(fh)
-    assert cfg["chinese_typo"]["enable"] is False
-    assert cfg["chinese_typo"]["enable_correction_quote"] is False
+    legacy = cfg.get("chinese_typo")
+    if legacy is None:
+        assert "response_post_process" in cfg, "新版宿主应有 response_post_process 段"
+        return
+    assert legacy["enable"] is False
+    assert legacy["enable_correction_quote"] is False
 
 
 def main() -> int:

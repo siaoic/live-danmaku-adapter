@@ -32,7 +32,7 @@ if str(_ENGINE_DIR) not in sys.path:
 import performance_engine as pe  # noqa: E402
 from vts.expression import detect_emotion  # noqa: E402
 
-MODEL_NAME = "示例模型"
+MODEL_NAME = "大肥鱼"
 
 #: 表情名 -> 相对路径（VTS ExpressionStateRequest 返回的形状）
 EXPRESSION_FILES = {
@@ -45,7 +45,7 @@ EXPRESSION_FILES = {
     "脸红": "expressions/脸红.exp3.json",
 }
 
-#: 表情文件内容（真实示例模型的这些文件大致就是这么做出来的）
+#: 表情文件内容（真实大肥鱼的这些文件大致就是这么做出来的）
 EXPRESSION_DOCS = {
     # 委屈/哭：泪 + 嘴角垮 + 压眉
     "expressions/流泪.exp3.json": {"Parameters": [

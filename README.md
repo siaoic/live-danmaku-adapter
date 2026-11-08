@@ -1,7 +1,3 @@
-<div align="center">
-  <img width="100%" src="https://erika.snowy.moe/v1/banner/siaoic/live-danmaku-adapter.webp?accent=auto&theme=light&description=MaiBot%20%E7%9B%B4%E6%92%AD%E5%85%A8%E9%93%BE%E8%B7%AF%E6%8F%92%E4%BB%B6%EF%BC%9A%E5%8F%8C%E5%B9%B3%E5%8F%B0%E5%BC%B9%E5%B9%95%20%2B%20Live2D%20%E6%BC%94%E5%87%BA%20%2B%20%E4%B8%BB%E5%8A%A8%E5%AF%B9%E8%AF%9D" alt="直播适配器 live-danmaku-adapter">
-</div>
-
 ## Introduction✨
 
 `直播适配器` 是一个全新的直播全链路企划。正如企划原型角色来自直播间里的 VTuber 一样，本企划的主角同样应当是一个「活着的人」，而不是一段只会输出文字的模型。类似于 VTuber 在现实中的实现，本企划致力于为她提供一个真正待在直播间里的能力。
@@ -143,6 +139,7 @@ focus = "去b站看名侦探柯南"
 ```text
 plugin.py              主插件：配置模型、生命周期、全部钩子、命令与 API
 core/                  事件模型、统一通道、消息映射与过滤
+core/prefix_cache.py    DeepSeek 前缀缓存稳定层（身份钉回 / 工具表冻结 / 唯一尾部槽 / 命中率观测）
 platforms/             B 站（blivedm）与抖音（签名 + 手写 protobuf 解析）链路
 vendor/blivedm/        内置的 B 站弹幕库（MIT）
 tts/                   Breeze-TTS-2.cpp 客户端、设备枚举、三级降级播放
@@ -156,23 +153,6 @@ danmaku.py             弹幕墙 HTTP 服务
 game_events.py         游戏事件接收口
 tests/                 离线自测
 ```
-
-### 已知问题
-
-- **TTS 配置热更新会抛 `AttributeError`**：`plugin.py` 的 `on_config_update` 里调用了
-  已随 GPT-SoVITS 移除而删除的 `_tts_params()`（现存的是 `_breeze_params()`）。
-  改 TTS 配置保存时会中断该次热更新后续步骤（播放设备重设、VTS 重连、字幕刷新、ASR 重建）。
-  临时绕过：改完 TTS 配置后重启 MaiBot。修复只需把那一行改成 `self._breeze_params()`。
-
-### 想改的话
-
-- **合并单流改成分房**：`CHANNEL_MERGE_PLATFORMS` / `CHANNEL_GROUP_ID` / `CHANNEL_GROUP_NAME`
-  三个常量已从配置节移进代码。分房要连动门控、节流、表情包屏蔽一起重新验证，不是改一个布尔值的事。
-- **加新平台**：在 `platforms/` 写一个把平台事件翻译成 `LiveEvent` 的连接协程，
-  交给 `LiveChannel.submit()`，其余全链路不用动。
-- **改演出效果**：分层的参数合成在 `engine/performance_engine.py`，
-  情绪到表情/面部/身体的对应在 `engine/emotion_pose.py`，
-  手势与情绪片段库在 `engine/cortico_clips.json`。
 
 ## About🎗️
 

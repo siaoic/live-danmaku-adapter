@@ -61,7 +61,7 @@ def test_oneshot_hotkeys_as_gestures() -> None:
 def test_paired_halves_are_not_oneshot() -> None:
     """「xx打开 / xx关闭」不能因为名字带后缀就被当成两条新的一次性动作。
 
-    真机踩过：示例模型的三对道具各多出一条「打开」「关闭」单发候选，
+    真机踩过：大肥鱼的三对道具各多出一条「打开」「关闭」单发候选，
     自动道具会拿它们当互不相干的小动作乱触发，道具就会挂住不收回。
     """
 

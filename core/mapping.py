@@ -34,15 +34,45 @@ _KIND_PREFIXES = {
     KIND_GUARD: "上舰",
 }
 
+# 不可信文本（弹幕正文/观众昵称）里的结构符号 → 无害近似字符。
+# 半角方括号是真实平台播报的格式（`[B站礼物] …送出了…`），全角【】是
+# AI 自己的动作记号语法——这两样绝不能让观众用打字复现出来。
+_UNTRUSTED_TRANSLATE = str.maketrans({
+    "[": "（",
+    "]": "）",
+    "【": "〖",
+    "】": "〗",
+    "<": "〈",
+    ">": "〉",
+    "\r": " ",
+    "\n": " ",
+})
+
+
+def sanitize_untrusted(text: str) -> str:
+    """中和不可信文本里的结构符号（防注入/防伪造事件，见上方表注释）。
+
+    内容本身保留（聊天价值不丢），但：
+    1. 永远拼不出与真实平台播报一致的 `[…]` 前缀——假礼物/假上舰/假主播
+       语音在格式上就不可能成立；
+    2. 永远打不出 AI 的动作记号语法 `【…】`，观众无法诱导 AI 模仿记号。
+    """
+
+    return str(text or "").translate(_UNTRUSTED_TRANSLATE)
+
 
 def format_event_text(event: LiveEvent) -> str:
-    """把事件渲染成单行文本，前缀标明平台与事件类型。"""
+    """把事件渲染成单行文本，前缀标明平台与事件类型。
 
-    user_name = event.user_name or "匿名观众"
+    观众可控的字段（昵称、弹幕正文、SC 正文、上舰提示里的人名）一律经过
+    :func:`sanitize_untrusted`——真实事件的播报格式只有插件自己能拼出来。
+    """
+
+    user_name = sanitize_untrusted(event.user_name) or "匿名观众"
     label = event.source_label
 
     if event.kind == KIND_SUPER_CHAT:
-        return f"[{label}醒目留言 ¥{event.price:g}] {user_name}: {event.text}"
+        return f"[{label}醒目留言 ¥{event.price:g}] {user_name}: {sanitize_untrusted(event.text)}"
     if event.kind == KIND_GIFT:
         count = event.gift_count or 1
         name = event.gift_name or "礼物"
@@ -50,10 +80,10 @@ def format_event_text(event: LiveEvent) -> str:
         return f"[{label}礼物] {user_name} 送出了 {name}x{count}{amount}"
     if event.kind == KIND_GUARD:
         guard = _GUARD_NAMES.get(event.guard_level, "舰长")
-        detail = event.text or f"{user_name} 开通了{guard}"
+        detail = sanitize_untrusted(event.text) or f"{user_name} 开通了{guard}"
         return f"[{label}上舰·{guard}] {detail}"
     prefix = _KIND_PREFIXES.get(event.kind, event.kind)
-    return f"[{label}{prefix}] {user_name}: {event.text}"
+    return f"[{label}{prefix}] {user_name}: {sanitize_untrusted(event.text)}"
 
 
 @dataclass(slots=True)
@@ -177,6 +207,9 @@ class DanmakuFilter:
         # 直播间的红包、投票、指令弹幕正文多为 [xxx] 占位，没有可聊的内容
         if self.drop_bracket and ("[" in stripped or "]" in stripped):
             return None
+        # 防注入兜底：drop_bracket 关掉时半角 [] 也要中和，全角【】（AI 的
+        # 动作记号语法）与换行（伪装多条消息）无论开关都中和。
+        stripped = sanitize_untrusted(stripped)
         if self.dedup_window_s > 0:
             last_seen = self._recent.get(stripped)
             if last_seen is not None and now - last_seen < self.dedup_window_s:

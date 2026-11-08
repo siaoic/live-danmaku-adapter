@@ -97,21 +97,33 @@ def test_injection_appends_to_existing_system_item() -> None:
     adapter = _adapter_with_table()
     adapter._schedule_pending_change = "娱乐档"
     items = [_system_item("你是主播。")]
-    new_items = adapter._inject_schedule_into_items(items)
-    # 易变段（当前档/时段变更）在对话尾部，不进 system（缓存友好）
-    new_items, _added = adapter._append_schedule_tail(new_items)
+    # 缓存契约（2026-11-08 二次校准）：日程拆成两条固定 Item——
+    # 恒定段（规则+时段表）进规则槽、由 LATE Hook 前置成稳定前缀；
+    # 易变段（当前档/时段变更）进唯一一条极短变量尾巴、放绝对末尾。
+    # 旧版把 422 字符整条放在新增历史之后，每轮新增消息都把它往后推，
+    # 18/20 轮的首个失配就落在这里。
+    new_items, _added = adapter._append_schedule_tail(items)
 
-    assert len(new_items) == 1, "不能新建第二条 system（Qwen 模板不允许）"
-    all_text = "\n".join(
-        str(pt.get("text") or "") for pt in new_items[0]["parts"] if isinstance(pt, dict)
-    )
-    # 稳定段（规则+时段表）与易变段（当前档/变更）都在这条 item 里——
-    # 单 item 场景下「最后一条文本」就是 system 本身，真实对话里尾部
-    # 规则落在最新消息上，system 前缀全程稳定
-    assert "日程表（必须遵守）" in all_text
-    assert "当前时段" in all_text
-    assert "【时段变更】" in all_text, "换挡标记没进上下文"
-    assert "你是主播。" in all_text, "原有 system 内容必须原样保留"
+    assert new_items[0] == items[0], "system 必须逐字节不变（缓存前缀）"
+    assert len(new_items) == 3, "system + 恒定规则槽 + 变量尾巴"
+    by_id = {str((it.get("meta") or {}).get("item_id")): it for it in new_items[1:]}
+    assert set(by_id) == {"live-prefix-cache-tail-rule", "live-prefix-cache-volatile"}
+
+    def text_of(item: dict) -> str:
+        return "\n".join(
+            str(pt.get("text") or "") for pt in item.get("parts", []) if isinstance(pt, dict)
+        )
+
+    stable_text = text_of(by_id["live-prefix-cache-tail-rule"])
+    volatile_text = text_of(by_id["live-prefix-cache-volatile"])
+    assert "日程表（必须遵守）" in stable_text
+    assert "当前时段" not in stable_text, "易变内容不能污染恒定前缀"
+    assert "当前时段" in volatile_text
+    assert "【时段变更】" in volatile_text, "换挡标记没进上下文"
+    assert "日程表（必须遵守）" not in volatile_text, "恒定段不该重复进变量尾巴"
+    system_text = text_of(new_items[0])
+    assert "你是主播。" in system_text, "原有 system 内容必须原样保留"
+    assert "日程表" not in system_text, "日程不能进 system（缓存前缀）"
     # 注入后换挡标记要被消费掉（不然每一轮都在喊「刚换挡」）
     assert adapter._schedule_pending_change == ""
 

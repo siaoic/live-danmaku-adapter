@@ -151,7 +151,15 @@ class ScheduleTable:
         """
 
         if self.empty:
-            return self.fallback or ""
+            # 关键：即使这段时间没有配置档位，也必须返回一段**固定文本**。
+            # 原来返回空串会让调用方整段跳过注入，于是 prompt 第 0 条的
+            # SystemMessageItem 变成「只有人格段」或「只有日程段」两种形态，
+            # 实测交替出现时缓存前缀整段失效（命中率压到 40~50%）。
+            # 固定占位既不改语义，又保证每轮 system 的 part 数量与字节都稳定。
+            return self.fallback or (
+                "## 日程表（必须遵守）\n\n"
+                "当前没有配置固定时段表，你可以按现场聊天自然发挥，但不要跑题太远。"
+            )
         lines = [period.render() for period in self.periods]
         head = [
             "## 日程表（必须遵守）",

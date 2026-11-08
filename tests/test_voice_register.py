@@ -129,7 +129,7 @@ def test_disabled_or_unreachable_is_noop(monkeypatch) -> None:
     monkeypatch.setattr(asyncio, "sleep", _nosleep)
 
     client = _FakeBreeze([], fail_health=True)
-    adapter = _adapter(client, ref_path="ref.wav")
+    adapter = _adapter(client, ref_path="E:/x/ref.wav")
     asyncio.run(adapter._ensure_breeze_voice())
     assert client.register_calls == []
 
